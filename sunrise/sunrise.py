@@ -3,18 +3,19 @@ import pandas as pd
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Arizona bounding box
-LAT_MIN, LAT_MAX = 31.33, 37.00
-LON_MIN, LON_MAX = -114.82, -109.05
-STEP_DEG = 0.5  # grid resolution in degrees
-DATE = "2026-05-22"
-TZID = "America/Phoenix"
+# Expanded Southwest bounding box (Arizona + surroundings)
+# Covers: CA, NV, UT, CO, NM, TX panhandle, northern Mexico
+LAT_MIN, LAT_MAX = 26.0, 42.0
+LON_MIN, LON_MAX = -120.0, -103.0
+STEP_DEG = 0.5          # grid resolution in degrees
+DATE     = "2026-05-22"
+TZID     = "UTC"        # UTC keeps times consistent across multiple states
 
 # Build grid
 lat_pts = np.arange(LAT_MIN, LAT_MAX + STEP_DEG, STEP_DEG)
 lon_pts = np.arange(LON_MIN, LON_MAX + STEP_DEG, STEP_DEG)
-grid = [(round(lat, 4), round(lon, 4)) for lat in lat_pts for lon in lon_pts]
-print(f"Querying {len(grid)} points over Arizona ({STEP_DEG}° grid) for {DATE}…")
+grid    = [(round(lat, 4), round(lon, 4)) for lat in lat_pts for lon in lon_pts]
+print(f"Querying {len(grid)} points ({STEP_DEG}° grid, {LAT_MIN}–{LAT_MAX}°N, {LON_MIN}–{LON_MAX}°E) for {DATE}…")
 
 
 def fetch_sun(lat, lon):
@@ -50,7 +51,7 @@ def fetch_sun(lat, lon):
 
 rows = []
 errors = []
-with ThreadPoolExecutor(max_workers=8) as ex:
+with ThreadPoolExecutor(max_workers=20) as ex:
     futures = {ex.submit(fetch_sun, lat, lon): (lat, lon) for lat, lon in grid}
     for i, future in enumerate(as_completed(futures), 1):
         lat, lon = futures[future]
@@ -58,7 +59,7 @@ with ThreadPoolExecutor(max_workers=8) as ex:
             rows.append(future.result())
         except Exception as e:
             errors.append((lat, lon, str(e)))
-        if i % 20 == 0 or i == len(grid):
+        if i % 100 == 0 or i == len(grid):
             print(f"  {i}/{len(grid)} done")
 
 sun_df = pd.DataFrame(rows).sort_values(["lat", "lon"]).reset_index(drop=True)
